@@ -17,8 +17,6 @@ classdef caut
         simid % the identification code for this simulation
     end
     
-    
-    
     methods
         function id = get.simid(obj)
             % generate a unique ID for each simulation. The id must contain
@@ -52,7 +50,6 @@ classdef caut
             id = [stat go hood field];
         end
         
-        
         function obj = caut(field, nbrs, nstates, ingo,toshow,colors)
             % Constructs the intial condition of the simulation
             par = inputParser;
@@ -74,9 +71,10 @@ classdef caut
             obj.show = par.Results.toshow;
             obj.colorsc = par.Results.colors;
         end
+        
+        % function to run the simulation
         function obj =  runSim(obj)
             tic
-            % function to run the simulation
             nstates = obj.states;
             % determine the size of the pad necessary for toroidal geometry
             sensdist = (size(obj.nhood,1)-1)/2;
@@ -98,18 +96,18 @@ classdef caut
             [ii,jj]=ndgrid(1:ww);
             jumps= sub2ind(sz,ii,jj) - sub2ind(sz, w, w) ;
             jumps=jumps(:);
-            obj.nhood=obj.nhood(:);
+            nhood=obj.nhood(:);
             
             if obj.show == 1;
+                fig = figure('color','k');
                 imge = imagesc(squeeze(obj.field(1,:,:)));
-                set(gcf,'color','k')
                 if ~isempty(obj.colorsc.caxis)
                     caxis(obj.colorsc.caxis);
                 end
                 axis image
                 axis off
             end
-                                        
+            
             for i = init:(epoch)
                 % make a torus
                 subfield = zeros(size(squeeze(obj.field(1,:,:)))+2*sensdist);
@@ -129,7 +127,7 @@ classdef caut
                 % pre-calculate weighted neighborhoods
                 % thanks to mattj on matlab help for these
                 NeighborTable=subfield(bsxfun(@plus,allinds,jumps(:).'));
-                NeighborTable=bsxfun(@times,NeighborTable, obj.nhood(:).');
+                NeighborTable=bsxfun(@times,NeighborTable, nhood(:).');
                 % loop through cells
                 
                 for k = 1:ncells
@@ -167,6 +165,14 @@ classdef caut
             end
             
         end
+        
+        % increase the length of a simulation
+        function obj = extend(obj, extension)
+            sy = size(obj.field,2);
+            sx = size(obj.field,3);
+            obj.field(end+1:end+extension,:,:) = zeros(extension,sy,sx);
+        end
+        
         function playBack(obj,varargin)
             % play a movie of the simulation by calling imagesc repeatedly
             % on obj.field
@@ -209,36 +215,61 @@ classdef caut
                 end
             end
         end
+        
+        % save sim as a .gif
         function makeGif(obj, outfname)
             % check outpath for validity
             sepind = strfind(outfname,filesep);
             pathname = outfname(1:sepind(end));
             filename = outfname(sepind(end)+1:end);
+            screensize = get(0,'ScreenSize');
+            % default pixel boundary around a single axis is ~1.29 * axis
+            % width and ~1.22 * axis height
+            figpos(1) = (screensize(3) - 1.29 * size(obj.field,3))/2;
+            figpos(2) = (screensize(4) - 1.22 * size(obj.field,2))/2;
+            figpos(3) = size(obj.field,3);
+            figpos(4) = size(obj.field,2);
             if ~isdir(pathname)
-                error([outfname ' does not contain a valid path.'])
+                disp([outfname ' does not contain a valid path. Using pwd.'])
+                pathname = [];
             end
             obj.field = uint8(obj.field);
             colormap(obj.colorsc.cmap)
             if ~isempty(obj.colorsc.caxis)
                 caxis(obj.colorsc.caxis);
             end
-            figure(1)
-            set(gcf,'color','k')
+            fig = figure('color','k','position',figpos);
             imge = imagesc(squeeze(obj.field(end,:,:)));
+            axis off
+            axis image
             drawnow
             fframes = 100;
             for n = [ -1 * ones(1,fframes) 1:size(obj.field,1)]
                 % throw up the last frame so the thumbnail works
                 if  n == -1
-                    set(imge,'cdata',squeeze(obj.field(end,:,:)));
-                    axis off
-                    axis image
-                    drawnow
+                    % check if figure still exists
+                    if ishandle(fig)
+                        set(imge,'cdata',squeeze(obj.field(end,:,:)));
+                        drawnow
+                    else
+                        fig = figure('color','k','position',figpos);
+                        imge = imagesc(squeeze(obj.field(end,:,:)));
+                        axis off
+                        axis image
+                        drawnow
+                    end
                 else
-                    set(imge,'cdata',squeeze(obj.field(n,:,:)));
-                    axis image
-                    axis off
-                    drawnow
+                    % check if figure still exists
+                    if ishandle(fig)
+                        set(imge,'cdata',squeeze(obj.field(n,:,:)));
+                        drawnow
+                    else
+                        fig = figure('color','k','position',figpos);
+                        imge = imagesc(squeeze(obj.field(n,:,:)));
+                        axis off
+                        axis image
+                        drawnow
+                    end
                 end
                 frame = getframe(1);
                 im = frame2im(frame);
@@ -248,12 +279,11 @@ classdef caut
                 else
                     imwrite(imind,cm,[pathname filename],'gif','WriteMode','append','delaytime',0);
                 end
-                
             end
-            
         end
+        
+        % snip out a section of the simulation. returns a (rnge,sidey,sidex) array.
         function out = snap(obj,rnge)
-            % snip out a section of the simulation. returns a (rnge,sidey,sidex) array.
             par = inputParser;
             par.addRequired('obj')
             par.addOptional('rnge',size(obj.field,1),@(x) true)
@@ -262,6 +292,5 @@ classdef caut
             out = double(squeeze(obj.field(rnge,:,:)));
         end
     end
-    
 end
 
