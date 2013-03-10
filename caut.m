@@ -123,7 +123,7 @@ classdef caut
                 temp = squeeze(obj.field(i-1,:,:));
                 % pre-calculate all transitions
                 nextstates = temp(:) + 1;
-                nextstates(nextstates >  nstates) = 1;
+                nextstates(nextstates ==  nstates+1) = 1;
                 % pre-calculate weighted neighborhoods
                 % thanks to mattj on matlab help for these
                 NeighborTable=subfield(bsxfun(@plus,allinds,jumps(:).'));
@@ -187,7 +187,7 @@ classdef caut
             par.addRequired('obj')
             par.addOptional('fig',1,@ishandle)
             par.addOptional('rate',24,@(x) x > 0)
-            par.addOptional('colors',obj.colorsc,@(x) ischar(x) || (ismatrix(x) && size(x,2) == 3))
+            par.addOptional('colors',obj.colorsc.cmap,@(x) ischar(x) || (ismatrix(x) && size(x,2) == 3))
             par.addOptional('reps',1,@(x) x > 0)
             par.parse(obj,varargin{:});
             
@@ -217,43 +217,50 @@ classdef caut
         end
         
         % save sim as a .gif
-        function makeGif(obj, outfname)
+        function out = makeGif(obj, outfname)
             % check outpath for validity
-            sepind = strfind(outfname,filesep);
-            pathname = outfname(1:sepind(end));
-            filename = outfname(sepind(end)+1:end);
+            if exist('outfname','var')
+              sepind = strfind(outfname,filesep);
+              pathname = outfname(1:sepind(end));
+              filename = outfname(sepind(end)+1:end);
+            else
+              filename = [obj.simid '.gif'];
+              pathname = [pwd filesep];
+            end
+            toplot = uint8(obj.field);
+
             screensize = get(0,'ScreenSize');
-            % default pixel boundary around a single axis is ~1.29 * axis
-            % width and ~1.22 * axis height
-            figpos(1) = (screensize(3) - 1.29 * size(obj.field,3))/2;
-            figpos(2) = (screensize(4) - 1.22 * size(obj.field,2))/2;
-            figpos(3) = size(obj.field,3);
-            figpos(4) = size(obj.field,2);
+            figpos(1) = 10;
+            figpos(2) = 10;
+            figpos(3) = 2.5*size(toplot,3);
+            figpos(4) = 2.5*size(toplot,2);
+
             if ~isdir(pathname)
                 disp([outfname ' does not contain a valid path. Using pwd.'])
                 pathname = [];
             end
-            obj.field = uint8(obj.field);
-            colormap(obj.colorsc.cmap)
-            if ~isempty(obj.colorsc.caxis)
-                caxis(obj.colorsc.caxis);
-            end
             fig = figure('color','k','position',figpos);
-            imge = imagesc(squeeze(obj.field(end,:,:)));
+            set(0,'currentfigure',fig);
+            imge = imagesc(squeeze(toplot(end,:,:)));
             axis off
             axis image
             drawnow
             fframes = 100;
-            for n = [ -1 * ones(1,fframes) 1:size(obj.field,1)]
+            colormap(obj.colorsc.cmap)
+            if ~isempty(obj.colorsc.caxis)
+                caxis(obj.colorsc.caxis);
+            end
+
+            for n = [ -1 * ones(1,fframes) 1:size(toplot,1)]
                 % throw up the last frame so the thumbnail works
                 if  n == -1
                     % check if figure still exists
                     if ishandle(fig)
-                        set(imge,'cdata',squeeze(obj.field(end,:,:)));
+                        set(imge,'cdata',squeeze(toplot(end,:,:)));
                         drawnow
                     else
                         fig = figure('color','k','position',figpos);
-                        imge = imagesc(squeeze(obj.field(end,:,:)));
+                        imge = imagesc(squeeze(toplot(end,:,:)));
                         axis off
                         axis image
                         drawnow
@@ -261,11 +268,11 @@ classdef caut
                 else
                     % check if figure still exists
                     if ishandle(fig)
-                        set(imge,'cdata',squeeze(obj.field(n,:,:)));
+                        set(imge,'cdata',squeeze(toplot(n,:,:)));
                         drawnow
                     else
                         fig = figure('color','k','position',figpos);
-                        imge = imagesc(squeeze(obj.field(n,:,:)));
+                        imge = imagesc(squeeze(toplot(n,:,:)));
                         axis off
                         axis image
                         drawnow
@@ -280,6 +287,8 @@ classdef caut
                     imwrite(imind,cm,[pathname filename],'gif','WriteMode','append','delaytime',0);
                 end
             end
+            close
+            out = 1;
         end
         
         % snip out a section of the simulation. returns a (rnge,sidey,sidex) array.

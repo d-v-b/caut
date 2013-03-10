@@ -61,7 +61,7 @@ epoch = 50;
 simstats = struct;
 simsummary = {};
 %%
-for i = 1
+for i = 1:500
   % field(1,:,:) = randi(3,side);
     %     mid = [round(sidey/2) round(sidex/2)];
     %     field(1,mid(1):mid(1) + hood-1,mid(2):mid(2)+hood-1) = (states-1)+ones(hood,hood);
@@ -78,10 +78,9 @@ for i = 1
 %     %
     seedstates = states;
     nseeds =1;
-    seedside = [sy 1];
+    seedside = [2 2];
     seed = ones(seedside(1),seedside(2))+(states-1);
-    field(1,:,5) = seed;
-    field(1,:,2:3) = field(1,:,2:3) + 5;
+    field(1,sy/2+1 : sy/2 + seedside(1),sx/2+1 : sx/2 + seedside(2)) = seed;
     disp('c2')
     %     for i = 1:nseeds
 %         tempx = randi(seedside(2) - seedside(1))+seedside(1);
@@ -143,19 +142,18 @@ for i = 1
     simsummary{i,3} = csim.go;
     simsummary{i,4} = i;
     if size(csim.field,1) == epoch
-      set(gcf,'position',[100 10 800 800],'color','k')
+      set(gcf,'position',[100 10 800 800])
       axis equal
       subplot('position',[.05 .05 .05 .05]);
       axis off
       imagesc(nhood);
-      set(gca,'color','r');
-      title(num2str(go),'color','r','fontsize',6)
+      title(num2str(go),'color','r')
       outfile = [csim.simid '.mat'];
       disp(['Saving ' outpath outfile])
       save([outpath outfile],'csim')
       figfile = csim.simid;
       print(gcf,[outpath figfile],'-dpng')
-      close all
+      close
       success = 0;
       while success == 0;
         try
