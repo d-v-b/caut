@@ -1,50 +1,75 @@
 %% Charlie Music zone
-% Need ~ 20m of simulations that are visually interesting
-%
-sx = 300;
-sy = 300;
-hood = 3;
-states = 2;
-field = [];
-hoodlim = 9;
-colorsc.cmap = 'gray';
-colorsc.caxis = [1 3];
-epoch = 20;
-field(1:epoch,:,:) = zeros(epoch,sx,sy);
-field(1,:,:) =  field(1,:,:) + 1;
-seed = ones(3)+1;
-seedy = round(sy/2);
-seedx = round(sx/2);
-field(1,seedx:seedx + size(seed,1)-1,seedy:seedy+size(seed,1)-1) = seed;
-hoodseed = randperm((hood^2));
-hoodseed(hoodseed == median(1:hood^2)) = [];
-hoodseed = hoodseed(1:randi(hoodlim));
-% impose a directional bias in nhood
-% nhood = randi(2,hood,hood)-1;
-nhood = zeros(hood,hood);
-nhood(hoodseed) = 1;
-%   while sum(nhood(1:median(numel(nhood)))) < 10/dbias * sum(nhood(median(1:numel(nhood))+1:end))
-%   nhood = randi(2,hood,hood)-1;
-%   end
 
-% while sum(sum(nhood)) < 1
-%    nhood = randi(2,hood,hood)-1;
+%%
+% playback w/filters -- sims look better a bit anti-aliased, how can we get
+% that to haps
+% crude-ass AA filter
+% generate sinc kernel
+
+kern = [1 4 7 4 1; 4 16 26 16 4; 7 26 41 26 7; 4 16 26 16 4; 1 4 7 4 1]/273;
+
+if sum(size(csim.nhood)) > 2*sqrt(numel(csim.nhood))
+  csim.nhood = reshape(csim.nhood,[sqrt(numel(csim.nhood)),sqrt(numel(csim.nhood))]);
+end
+ex = csim.extend([50,150,150]);
+% sy = size(ex.field,2);
+% sx = size(ex.field,3);
+% ex.field(1,end-1:end,1:2) = ex.field(1,1+(sy/2):2+(sy/2),1+(sy/2):2+(sy/2));
+% ex.field(1,1+(sy/2):2+(sy/2),1+(sy/2):2+(sy/2)) = ones(size(ex.field(1,1+(sy/2):2+(sy/2),1+(sy/2):2+(sy/2))));
+ex.field(2:end,:,:) = ex.field(2:end,:,:)*0;
+ex = ex.runSim;
+
+terp.a = interp1(ex.field,.05:0.05:50);
+% terp.b = interp1(ex.field,50.05:0.05:100);
+% for i = 1:2*size(ex.field,1) - 1
+% terp(i,:
 % end
-trigs = randperm(sum(sum(nhood == 1)));
-go = randi(sum(sum(nhood == 1)),1);
-go = trigs(1:go);
-stay = [1:(numel(nhood)-1)];
-stay = setdiff(stay,go);
-show = 1;
-sim = caut(field,nhood,states,go,show,colorsc);
-sim = sim.runSim;
 
 %%
-sim2 = sim.extend(100);
+% colormap(lbmap(256,'redblue'))
+colormap(gray(256));
+for i = 1:size(terp.b,1)
+  offset = [];
+  
+  four = log(abs(fftshift(fft2(squeeze(terp.b(i,:,:))))));
+  four = four(4:end-3,4:end-3);
+  imagesc(four);
+  offset = .5* (size(terp.b,2) - size(four,1));
+  imge = squeeze(terp.b(i,offset+1:end-offset,offset+1:end-offset));
+  
+  four(imge > min(min(imge))) = -NaN;
+  %    imagesc(log(abs(fftshift(fft2(squeeze(conv2(upsc,kern,'valid')))))));
+  %   imagesc(conv2(log(abs(fftshift(fft2(squeeze(squeeze(terp.a(i,:,:))))))),kern,'valid'));
+  imagesc(four);
+  %  imagesc(log(abs(fftshift(fft2(squeeze(imge(:,:)))))));
+  % title(num2str(caxis))
+  
+caxis([-5 4])
+  % colorbar
+  pause(.075)
+end
+
+% how the fuck do I smooth these out in time?
+% upsample the image
+
 
 %%
-outpath = uigetdir;
-outpath = [outpath filesep];
+for i = 1:150
+  temp(i,:,:)  = ifft2(filtmat .* fftshift(fft2(squeeze(ex.field(i,:,:)))));
+  imagesc(log(abs(squeeze(temp(i,:,:)))));
+  colormap hot
+  pause(.1)
+end
+  %%
+% if working with a loaded sim
+ex = csim.extend([100 50 50]);
+ex = ex.runSim;
+
+%%
+
+
+
+%%
 
 % general simulation area
 clear csim
@@ -57,11 +82,17 @@ field = [];
 hoodlim = 25;
 colorsc.cmap = 'gray';
 colorsc.caxis = [1 states];
-epoch = 50;
+epoch = 150;
 simstats = struct;
 simsummary = {};
+dump = 0;
+if dump == 1;
+  outpath = uigetdir;
+  outpath = [outpath filesep];
+end
+
 %%
-for i = 1:500
+for i = 1
   % field(1,:,:) = randi(3,side);
     %     mid = [round(sidey/2) round(sidex/2)];
     %     field(1,mid(1):mid(1) + hood-1,mid(2):mid(2)+hood-1) = (states-1)+ones(hood,hood);
@@ -78,9 +109,15 @@ for i = 1:500
 %     %
     seedstates = states;
     nseeds =1;
-    seedside = [2 2];
+    seedside = [3 3];
+    barsz = [sy 3];
+    % barrier blocking simulation growth
+    % upper left corner of barrier
+    barp = [1 1];
     seed = ones(seedside(1),seedside(2))+(states-1);
-    field(1,sy/2+1 : sy/2 + seedside(1),sx/2+1 : sx/2 + seedside(2)) = seed;
+    barrier = ones(barsz)-2;
+    field(1,sy/2+1:sy/2 + seedside(1),4:seedside(2)+3) = seed;
+    field(1,barp(1):barp(1) + barsz(1) -1,barp(2):barp(2)+barsz(2)-1) = barrier;
     disp('c2')
     %     for i = 1:nseeds
 %         tempx = randi(seedside(2) - seedside(1))+seedside(1);
@@ -101,8 +138,7 @@ for i = 1:500
 %     randx = randpos(1);
 %     randy = randpos(2);
 %     randxw = randi(sx/10);
-    
-    % field(1,1:end,randx:randx+randxw) = randi(states,side,randxw+1);
+%     field(1,1:end,randx:randx+randxw) = randi(states,side,randxw+1);
    
     field(2:epoch,:,:) = zeros(epoch-1,size(field,2),size(field,3));
     disp('c2.1')
@@ -116,7 +152,7 @@ for i = 1:500
     nhood = zeros(hood,hood);
     disp('c2.4')
     nhood(hoodseed) = 1;
-    nhood(nhood == median(1:hood^2)) =0;
+    nhood(median(1:hood^2)) =0;
     %   while sum(nhood(1:median(numel(nhood)))) < 10/dbias * sum(nhood(median(1:numel(nhood))+1:end))
     %   nhood = randi(2,hood,hood)-1;
     %   end
@@ -141,19 +177,20 @@ for i = 1:500
     simsummary{i,2} = csim.nhood;
     simsummary{i,3} = csim.go;
     simsummary{i,4} = i;
-    if size(csim.field,1) == epoch
-      set(gcf,'position',[100 10 800 800])
+    if size(csim.field,1) == epoch & dump ==1
+      set(gcf,'position',[100 10 800 800],'color','k')
       axis equal
       subplot('position',[.05 .05 .05 .05]);
       axis off
       imagesc(nhood);
-      title(num2str(go),'color','r')
+      set(gca,'color','r');
+      title(num2str(go),'color','r','fontsize',6)
       outfile = [csim.simid '.mat'];
       disp(['Saving ' outpath outfile])
       save([outpath outfile],'csim')
       figfile = csim.simid;
       print(gcf,[outpath figfile],'-dpng')
-      close
+      close all
       success = 0;
       while success == 0;
         try

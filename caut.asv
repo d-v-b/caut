@@ -88,10 +88,6 @@ classdef caut
             allinds = sub2ind([sy + 2*sensdist sx + 2*sensdist], allsubs(:,1) + sensdist, allsubs(:,2) + sensdist);
             % Figure out where to start based on where the first 0 is in field
             init = min(1+floor(find(permute(obj.field, [3 2 1]) == 0)/ncells));
-            if isempty(init)
-              disp('No init value found in field.')
-              return
-            end
             % make neighborhood indices
             sz=[sy sx] + 2*sensdist;
             w=sensdist+1;
@@ -175,7 +171,7 @@ classdef caut
           if length(ext) > 3
             error('Extension must be a vector with three or fewer elements')
           elseif length(ext) < 3
-            % stuff ext with zeros if it has fewer than 3 elements
+            % extend ext if it has fewer than 3 
             ext(3) = 0;
           elseif ext(1) < 1
             error('Must add positive, non-zero amount of time')
@@ -196,7 +192,7 @@ classdef caut
           newfield = ones(ep,sy+ext(2),sx + ext(3));
           newfield(:,1 + ext(2) / 2 : sy + ext(2) / 2,...
             1 + ext(3) / 2 : sx + ext(3) / 2) = obj.field;
-          newfield(end+1:end+ext(1),:,:) = zeros(ext(1),...
+          newfield(end+1:end+extension(1),:,:) = zeros(extension(1),...
             sy + ext(2),sx + ext(3));
           obj.field = newfield;
         end
