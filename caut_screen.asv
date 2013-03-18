@@ -1,5 +1,6 @@
 %%
-% general simulation area
+% load/run simulations and stock a database with various parameters of the sims
+
 clear csim
 clear field
 sx = 300;
@@ -16,12 +17,8 @@ simstats.diffs = {};
 simstats.go = {};
 simstats.nhood = {};
 simsummary = {};
-dump = 1;
-if dump == 1;
-  outpath = uigetdir;
-  outpath = [outpath filesep];
-end
-count = 12;
+
+count = 1;
 %%
 while count < 5000;
   % field(1,:,:) = randi(3,side);
@@ -43,7 +40,7 @@ while count < 5000;
   nseeds = 4;
   seedside = [1:4; 1:4]';
   margx = sx/5;
-  seedx = round(margx+[(sx-2*margx)/nseeds :(sx-2*margx)/nseeds: (sx-2*margx)]);
+  seedx = round(margx+linspace(0,sx-2*margx,nseeds));
   seedy = round(repmat(sy/2,[1 nseeds]));
   for s = 1:nseeds
     seed = ones(seedside(s),seedside(s))+(states-1);
@@ -56,17 +53,19 @@ while count < 5000;
   
   field(2:epoch,:,:) = zeros(epoch-1,size(field,2),size(field,3));
   disp('c2.1')
-  % confine the number of 'on' sites in the neighborhood to 8
-  hoodseed = randperm((hood^2));
-  disp('c2.2')
-  disp('c2.3')
-  hoodseed = hoodseed(1:randi(hoodlim));
-  % impose a directional bias in nhood
-  % nhood = randi(2,hood,hood)-1;
+  
   nhood = zeros(hood,hood);
-  disp('c2.4')
-  nhood(hoodseed) = 1;
-  nhood(median(1:hood^2)) =0;
+  while ~any(nhood)
+    hoodseed = randperm((hood^2));
+    disp('c2.2')
+    disp('c2.3')
+    hoodseed = hoodseed(1:randi(hoodlim));
+    % impose a directional bias in nhood
+    % nhood = randi(2,hood,hood)-1;
+    disp('c2.4')
+    nhood(hoodseed) = 1;
+    nhood(median(1:hood^2)) =0;
+  end
   %   while sum(nhood(1:median(numel(nhood)))) < 10/dbias * sum(nhood(median(1:numel(nhood))+1:end))
   %   nhood = randi(2,hood,hood)-1;
   %   end
@@ -96,7 +95,7 @@ while count < 5000;
     % whether the derivative of the sum is constant
     cv = (std(test(1:10))/mean(test(1:10)) > std(test(end-9:end))/mean(test(end-9:end)));
     simstats.diffs{i} = test;
-    simstats.nhood{i} = csim.nhood;
+    simstats.nhood{} = csim.nhood;
     simstats.go{i} = csim.go;
     if any(diff(test)) & ~cv
         set(gcf,'position',[100 10 900 600],'color','k')
@@ -158,41 +157,4 @@ while count < 5000;
   
   end
     count = count + 1;
-  end
-  %%
-  % animations
-  
-  [infile inpath] = uigetfile('multiselect','on');
-  if ~iscell(infile)
-    infile = {infile};
-  end
-  outpath = uigetdir;
-  %%
-  for xa = 1:numel(infile)
-    load([inpath infile{xa}])
-    p.colorsc = 'gray'
-    sepind = strfind(infile{xa},'.');
-    outname = [outpath filesep 'aut'  infile{xa}(1:sepind-1)]
-    if size(p.field,1) > 100
-      p.makeGif(outname)
-    end
-  end
-  %%
-  figure(1)
-  filename = [p.simid 'surfwiener2.gif'];
-  t = surf(wiener2(double(squeeze(p.field(1,:,:)))));
-  shading interp
-  set(gca,'cameraposition',[177.9686 81.1290 915.4978])
-  set(gca,'cameraviewangle',4)
-  for n = 1:size(p.field,1)
-    set(t,'zdata',wiener2(squeeze(double(p.field(n,:,:)))))
-    drawnow
-    frame = getframe(1);
-    im = frame2im(frame);
-    [imind,cm] = rgb2ind(im,256);
-    if n == 1;
-      imwrite(imind,cm,filename,'gif', 'Loopcount',inf);
-    else
-      imwrite(imind,cm,filename,'gif','WriteMode','append');
-    end
   end

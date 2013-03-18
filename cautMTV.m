@@ -25,10 +25,10 @@ szx = 1;
 ex.field(1,sy/2:sy/2 + (szy -1),sx/2:sx/2 + (szx -1)) = 1+ones(szy,szy);
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-ex = ex.extend([1,300+(300-size(ex.field,2)),300+(300-size(ex.field,3))]);
+ex = ex.extend([100,300+(300-size(ex.field,2)),300+(300-size(ex.field,3))]);
 % ex.field(2:end,:,:) = ex.field(2:end,:,:)*0;
 ex = ex.runSim;
-
+%%
 terp.a = interp1(ex.field,0:.1:15);
 % terp.b = interp1(ex.field,50.05:0.05:100);
 % for i = 1:2*size(ex.field,1) - 1
@@ -68,10 +68,18 @@ clear imge
 %%
 figure;
 close all
-set(gcf,'renderer','zbuffer')
+set(gcf,'renderer','zbuffer','menubar','none',...
+  'toolbar','none','units','normalized','outerposition',[-.01 -.01 1.3 1.3])
 colormap(hot(3000));
+% screensize = get(0,'monitorPositions');
+% screensize = screensize(3:4);
+% set(gcf,'position',[-1 -1 screensize(1) screensize(4) + 50])
 for i = 1:size(terp.a,1)
   imagesc(squeeze(terp.a(i,:,:)));
+  set(gcf,'color','k')
+  
+%   set(gcf,'position',[1 1 screensize screensize]) 
+  
   %  imagesc(log(abs(fftshift(fft2(squeeze(imge(:,:)))))));
   % title(num2str(caxis))
   
