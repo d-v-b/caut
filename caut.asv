@@ -7,6 +7,13 @@
 % --Davis Bennett--
 %--  03/19/2013  --
 
+
+
+
+
+
+
+
 %%%%%%%%%%%%%%%%%%%%%%%%
 
 
@@ -62,7 +69,7 @@ classdef caut
             id = [stat go hood field];
         end
         
-        function obj = caut(field, nbrs, ingo, nstates ,toshow, colors)
+        function obj = caut(field, nbrs, nstates, ingo,toshow,colors)
             % Constructs the intial condition of the simulation
             par = inputParser;
             defcol.cmap = 'gray';
@@ -94,11 +101,8 @@ classdef caut
             epoch = size(obj.field,1);
             sy = size(obj.field,2);
             sx = size(obj.field,3);
-            % generate all the subscript coordinates
             [allsubs(:,1) allsubs(:,2)] = ind2sub([sy sx],1:numel(obj.field(1,:,:)));
             ncells = numel(obj.field(1,:,:));
-            % translate subscript indices from field into their corresponding linear 
-            % indices in subfield
             allinds = sub2ind([sy + 2*sensdist sx + 2*sensdist], allsubs(:,1) + sensdist, allsubs(:,2) + sensdist);
             % Figure out where to start based on where the first 0 is in field
             init = min(1+floor(find(permute(obj.field, [3 2 1]) == 0)/ncells));
@@ -136,47 +140,52 @@ classdef caut
                 % each axis and making a box with those edges
                 
                 % make a torus
-                subfield = maketorus(squeeze(obj.field(i-1,:,:)),sensdist);
-                
+                subfield = zeros(size(squeeze(obj.field(1,:,:)))+2*sensdist);
+                % Bottom right
+                subfield((2*sensdist+1):end,(2*sensdist+1):end) = circshift(squeeze(obj.field(i-1,:,:)),[-sensdist,-sensdist]);
+                % Top left
+                subfield(1:end-(2*sensdist),1:end-(2*sensdist)) = circshift(squeeze(obj.field(i-1,:,:)),[sensdist,sensdist]);
+                % Bottom left
+                subfield((2*sensdist+1):end,1:end-(2*sensdist)) = circshift(squeeze(obj.field(i-1,:,:)),[-sensdist,sensdist]);
+                % Top right
+                subfield(1:end-(2*sensdist),(2*sensdist+1):end) = circshift(squeeze(obj.field(i-1,:,:)),[sensdist,-sensdist]);
+                                
+                temp = squeeze(obj.field(i-1,:,:));
                 % pre-calculate all transitions
-                nextstates = subfield(:) + 1;
+                nextstates = temp(:) + 1;
                 % values above nstates are ignored
                 nextstates(nextstates ==  nstates+1) = 1;
-                
-                if i > 2
-                    % if i == 2 then there's nothing to check before updating.
-                    % otherwise, we can subtract the previous two fields and 
-                    % only operate on the set of all cells within sendist of a
-                    % cell that changed on the last update. 
-                    % grab the indices of all the cells that changed
-                    deltas = find(subfield - maketorus(squeeze(obj.field(i-2,:,:)),sensdist));
-                    % add indices of their neighbors
-                    delta_nbrs = bsxfun(@plus,deltas,jumps(:).');
-                    delta_nbrs(delta_nbrs < 1 | delta_nbrs > numel(subfield)) = [];
-                    % we only want the unique values falling within allinds
-                    % convert to subscripts (possibly inline, if this is
-                    % slow)
-                    deltas = unique(vertcat(deltas(:),  delta_nbrs(:)));
-                    [dy dx] = ind2sub(size(subfield),deltas);
-                    % toss all cells outside the field
-                    deltas(dy' <= sensdist | dy' > (sy + sensdist) | dx' <= sensdist | dx' > (sx + sensdist)) = [];
-                    inds = deltas;
-                    % add to this list all the cells in the neighborhood of
-                    % these cells
-                else
-                    inds = allinds;
-                end
-                
                 % pre-calculate weighted neighborhoods
                 % thanks to mattj on matlab help for these
-                NeighborTable=subfield(bsxfun(@plus,inds,jumps(:).'));
+                NeighborTable=subfield(bsxfun(@plus,allinds,jumps(:).'));
                 NeighborTable=bsxfun(@times,NeighborTable, nhood(:).');
-                % see how vectorizing speeds things up
-                NeighborTable = sum(bsxfun(@eq, NeighborTable, nextstates(inds)),2);
-                NeighborTable = find(sum(bsxfun(@eq, NeighborTable, obj.go),2));
-                subfield(inds(NeighborTable)) = nextstates(inds(NeighborTable));
-
-                obj.field(i,:,:) = subfield(1+sensdist:(end-sensdist),1+sensdist:(end-sensdist));
+                
+                % if i == 2 then there's nothing to check before updating.
+                % otherwise, we can subtract the previous two fields and 
+                % only operate on the set of all cells within sendist of a
+                % cell that changed on the last update. 
+                
+                if i > 2
+                    % grab the indices of all the cells that changed
+                    pretemp = find(squeeze(obj.field(i-1,:) - obj.field(i-2,:)));
+                    % add to this list all the cells in the neighborhood of
+                    % these cells
+                    pretemp = vertcat(pretemp, NeighborTable(k,:)); 
+                end
+                
+                
+                % loop through cells
+                
+                for k = 1:ncells
+                    neighbors = NeighborTable(k,:);
+                    quorum = sum(neighbors == nextstates(k));
+                    if ~isempty(find(obj.go == quorum,1))
+                        temp(k) = nextstates(k);
+                        deltas = [deltas k];
+                    end
+                end
+                
+                obj.field(i,:,:) = temp;
                 if obj.show == 1;
                     colormap(obj.colorsc.cmap);
                     set(imge,'cdata',squeeze(obj.field(i,:,:)));
@@ -186,29 +195,20 @@ classdef caut
                 if i > obj.states && isequal(obj.field(i-obj.states,:,:),obj.field(i,:,:)) || isequal(obj.field(i-1,:,:),obj.field(i,:,:))
                     % Wipe the redundant future times
                     obj.field(i+1:end,:,:) = [];
-                    disp('Abort: Simulation oscillating or crystallized')
+                    disp('Abort: Simulation oscillating')
                     break
                 end
             end
-            
             disp(['Simulation completed in ' num2str(toc)  's'])
-            
-            function torus = maketorus(mat,distance)
-            % given an array of size = [y,x], return an array of 
-            % size = [y,x] + 2 * distance where the last [distance] rows
-            % columns have been copied to the opposite side of the array,
-            % respectively. So given mat = [1 2 3; 4 5 6; 7 8 9] and
-            % distance = 1, maketorus(mat,distance) returns
-            % [9 7 8 9 7; 3 1 2 3 1; 6 4 5 6 4; 9 7 8 9 7; 3 1 2 3 1];
-            torus = zeros(size(squeeze(mat))+2*distance);
-            % Bottom right
-            torus((2*distance+1):end,(2*distance+1):end) = circshift(squeeze(mat),[-distance,-distance]);
-            % Top left
-            torus(1:end-(2*distance),1:end-(2*distance)) = circshift(squeeze(mat),[distance,distance]);
-            % Bottom left
-            torus((2*distance+1):end,1:end-(2*distance)) = circshift(squeeze(mat),[-distance,distance]);
-            % Top right
-            torus(1:end-(2*distance),(2*distance+1):end) = circshift(squeeze(mat),[distance,-distance]);
+            function z = zipintersect(x,y)
+                % quickly find the intersection of two positive integer sets
+                if ~isempty(x)&&~isempty(y)
+                    P = zeros(1, max(max(x),max(y)) ) ;
+                    P(x) = 1;
+                    z = y(logical(P(y)));
+                else
+                    z = [];
+                end
             end
             
         end
