@@ -118,8 +118,10 @@ classdef caut
             nhood=obj.nhood(:);
             
             if obj.show == 1;
-                fig = figure('color','k','position',[10 100 700 700]);
+                fig = figure('color','k','position',[10 10 700 700]);
                 imge = imagesc(squeeze(obj.field(1,:,:)));
+                set(gca,'units','normalized')
+                set(gca,'position',[0 0 1 1])
                 if ~isempty(obj.colorsc.caxis)
                     caxis(obj.colorsc.caxis);
                 end
@@ -137,7 +139,6 @@ classdef caut
                 
                 % make a torus
                 subfield = maketorus(squeeze(obj.field(i-1,:,:)),sensdist);
-                
                 % pre-calculate all transitions
                 nextstates = subfield(:) + 1;
                 % values above nstates are ignored
@@ -210,10 +211,9 @@ classdef caut
             % Top right
             torus(1:end-(2*distance),(2*distance+1):end) = circshift(squeeze(mat),[distance,-distance]);
             end
-            
         end
         
-        % increase the length of a simulation
+        % increase the length and size of a simulation
         function obj = extend(obj, ext)
           if length(ext) > 3
             error('Extension must be a vector with three or fewer elements')

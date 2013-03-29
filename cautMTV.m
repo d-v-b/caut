@@ -29,7 +29,7 @@ ex = ex.extend([100,300+(300-size(ex.field,2)),300+(300-size(ex.field,3))]);
 % ex.field(2:end,:,:) = ex.field(2:end,:,:)*0;
 ex = ex.runSim;
 %%
-terp.a = interp1(ex.field,0:.1:15);
+sterp.a = interp1(ex.field,0:.1:15);
 % terp.b = interp1(ex.field,50.05:0.05:100);
 % for i = 1:2*size(ex.field,1) - 1
 % terp(i,:
