@@ -192,8 +192,9 @@ classdef caut
                 end
             end
             
-            disp(['Simulation completed in ' num2str(toc)  's'])
-            
+            if obj.show == 1
+                disp(['Simulation completed in ' num2str(toc)  's']);
+            end
             function torus = maketorus(mat,distance)
             % given an array of size = [y,x], return an array of 
             % size = [y,x] + 2 * distance where the last [distance] rows
