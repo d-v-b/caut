@@ -9,6 +9,10 @@
 
 %%%%%%%%%%%%%%%%%%%%%%%%
 
+% TODO (DVB): increase dimensionality of nhood along time and state axis --
+% different states can have different nhoods. 
+% TODO (DVB): increase dimensionality of go rules along state axis --
+% different states can have different rules for advancing
 
 classdef caut
 
@@ -17,11 +21,10 @@ classdef caut
         nhood % array: neighbors around a cell. a matrix with a NaN at the cell
         % to be updated; values at all other positions determine the weight of
         % that position in the updating step
-        go % array: conditions for a cell to advance
-        stay % array: conditions for a cell to stay put
+        go % cell: conditions for a cell to advance; if size(go,1) > 1, 
+        % then there are multiple go rules, at most one per state.
         field % array: the simulation itself
         show % struct: determines how simulation is displayed
-        dump % struct: params for saving simulation
         colorsc % colorscale for visualizing system
     end
     
@@ -51,55 +54,64 @@ classdef caut
                 hood = [hood '-' num2str(dec2hex(str2num(k(i,:))))];
             end
             
-            field = '-f';
+            fld = '-f';
             for i = 1:3
                 if i == 1
-                    field = strcat(field, [num2str(size(obj.field,i))]);
+                    fld = strcat(fld, [num2str(size(obj.field,i))]);
                 else
-                    field = strcat(field, ['-' num2str(size(obj.field,i))]);
+                    fld = strcat(fld, ['-' num2str(size(obj.field,i))]);
                 end
             end
-            id = [stat go hood field];
+            id = [stat go hood fld];
         end
         
-        function obj = caut(field, nbrs, ingo, nstates ,toshow, colors)
+        function obj = caut(fld_matrix, nbr_matrix, go_matrix, varargin)
             % Constructs the intial condition of the simulation
             par = inputParser;
             defcol.cmap = 'gray';
             defcol.caxis = [];
-            par.addRequired('field',@(x) numel(size(x)) > 2)
-            par.addRequired('nbrs',@(x) size(x,1) == size(x,2))
-            par.addRequired('ingo')
-            par.addOptional('nstates',max(unique(field(1,:,:))),@(x) x > 1)
-            par.addOptional('toshow',1,@(x) x == 1 || x == 0)
-            par.addOptional('colors',defcol,@(x) isstruct(x))
-            
-            par.parse(field,nbrs,ingo,nstates,toshow,colors)
+            par.addRequired('field')
+            par.addRequired('nhood')
+            par.addRequired('go')
+            par.addParamValue('colorsc','gray')
+            par.addParamValue('nstates',numel(unique(fld_matrix(1,:,:))))
+            par.addParamValue('show',1)
+            par.addParamValue('fieldshape','torus')
+            par.parse(fld_matrix, nbr_matrix, go_matrix,varargin{:})
             
             obj.field = par.Results.field;
-            obj.nhood = par.Results.nbrs;
-            obj.go = par.Results.ingo;
+            % TODO (DVB) eventually it might makes sense to put the nhood
+            % and go rules in a single cell array called "rules", not sure.
+            obj.nhood = par.Results.nhood;
+            obj.go = par.Results.go;
+            if ~iscell(obj.go)
+                obj.go = {obj.go};
+            end
             obj.states = par.Results.nstates;
-            obj.show = par.Results.toshow;
-            obj.colorsc = par.Results.colors;
+            obj.show = par.Results.show;
+            obj.colorsc = par.Results.colorsc;
+            obj.fieldshape = par.Results.fieldshape;
         end
         
         % function to run the simulation
         function obj =  runSim(obj)
             tic
             nstates = obj.states;
-            % determine the size of the pad necessary for toroidal geometry
-            sensdist = (size(obj.nhood,1)-1)/2;
-            % set params
+            % 1 gives a toroidal geometry, 0 gives a plane
+            shape = strcmp(obj.fieldshape,'torus');
+            % Determine the size of the pad necessary for edges
+            sensdist = (size(obj.nhood,2)-1)/2;
+            % Set params
             epoch = size(obj.field,1);
             sy = size(obj.field,2);
             sx = size(obj.field,3);
             % generate all the subscript coordinates
-            [allsubs(:,1) allsubs(:,2)] = ind2sub([sy sx],1:numel(obj.field(1,:,:)));
             ncells = numel(obj.field(1,:,:));
-            % translate subscript indices from field into their corresponding linear 
+            [allsubs(:,1), allsubs(:,2)] = ind2sub([sy sx],1:ncells);
+            % Translate subscript indices from field into their corresponding linear 
             % indices in subfield
             allinds = sub2ind([sy + 2*sensdist sx + 2*sensdist], allsubs(:,1) + sensdist, allsubs(:,2) + sensdist);
+            
             % Figure out where to start based on where the first 0 is in field
             init = min(1+floor(find(permute(obj.field, [3 2 1]) == 0)/ncells));
             if isempty(init)
@@ -107,16 +119,7 @@ classdef caut
               return
             end
             
-            % make neighborhood indices
-            % thanks to mattj on matlab help for this
-            sz=[sy sx] + 2*sensdist;
-            w=sensdist+1;
-            ww=w+sensdist;
-            [ii,jj]=ndgrid(1:ww);
-            jumps= sub2ind(sz,ii,jj) - sub2ind(sz, w, w) ;
-            jumps=jumps(:);
-            nhood=obj.nhood(:);
-            
+            % Prepare figure
             if obj.show == 1;
                 fig = figure('color','k','position',[10 10 700 700]);
                 imge = imagesc(squeeze(obj.field(1,:,:)));
@@ -129,55 +132,103 @@ classdef caut
                 axis off
             end
              
+            % Make neighborhood indices
+            % thanks to mattj on matlab help for this
+            % Dimensions of the padded field.
+            sz = [sy sx] + 2 * sensdist;
+            % Distance from central cell to edge of nhood
+            w = sensdist + 1;
+            % Width of nhood
+            ww = w + sensdist;
+            % Form an (x,y) grid with the size of nhood
+            [ii ,jj] = ndgrid(1:ww);
+            % Convert the grid to linear indices that can be added to an
+            % index to find the linear indices of all the cells around it
+            % TODO (DVB) assign the neighborhood at this point by paring
+            % down jumps
+            jumps = sub2ind(sz, ii, jj) - sub2ind(sz, w, w);
+            jumps = jumps(:);
+            nbr_inds = bsxfun(@plus,inds,jumps(:).');
+            
+            % TODO (DVB) What is the best way to handle neighborhoods if
+            % the neighborhood can be 3-dimensional (past-dependent) and
+            % state-dependent? Adding dimensions makes ultimately linearizing it
+            % increasingly difficult. Let's forget about linearizing it for
+            % now, since that doesn't scale well at all.
+            nhood = obj.nhood;
+                        
+                        
             for i = init:(epoch)
-                % To do: accelerate simulation by tracking which cells
-                % chnaged and only checking the smallest area containing those 
-                % changed cells, plus sensdist.
-                % we can check by storing which cells changed using linear
-                % coordinates, then checking which indices are closest to
-                % each axis and making a box with those edges
+                % TODO (DVB): Non-toroidal geometry (finite energy)              
                 
-                % make a torus
-                subfield = maketorus(squeeze(obj.field(i-1,:,:)),sensdist);
-                % pre-calculate all transitions
-                nextstates = subfield(:) + 1;
-                % values above nstates are ignored
-                nextstates(nextstates ==  nstates+1) = 1;
-                
-                if i > 2
-                    % if i == 2 then there's nothing to check before updating.
-                    % otherwise, we can subtract the previous two fields and 
-                    % only operate on the set of all cells within sendist of a
-                    % cell that changed on the last update. 
-                    % grab the indices of all the cells that changed
-                    deltas = find(subfield - maketorus(squeeze(obj.field(i-2,:,:)),sensdist));
-                    % add indices of their neighbors
-                    delta_nbrs = bsxfun(@plus,deltas,jumps(:).');
-                    delta_nbrs(delta_nbrs < 1 | delta_nbrs > numel(subfield)) = [];
-                    % we only want the unique values falling within allinds
-                    % convert to subscripts (possibly inline, if this is
-                    % slow)
-                    deltas = unique(vertcat(deltas(:),  delta_nbrs(:)));
-                    [dy dx] = ind2sub(size(subfield),deltas);
-                    % toss all cells outside the field
-                    deltas(dy' <= sensdist | dy' > (sy + sensdist) | dx' <= sensdist | dx' > (sx + sensdist)) = [];
-                    inds = deltas;
-                    % add to this list all the cells in the neighborhood of
-                    % these cells
+                % make a torus if appropriate
+                % otherwise pad with zeros
+                if shape == 1
+                    subfield = maketorus(squeeze(obj.field(i-size(obj.nhood,1):i,:,:)),sensdist);
                 else
-                    inds = allinds;
+                    subfield = zeros(size(nhood,1),sy+2*sensdist,sx+2*sensdist);
+                    subfield(:,sensdist+1:end-sensdist,sensdist+1:end-sensdist) = obj.field(end-size(nhood,1):end,:,:);
                 end
+                
+                % pre-calculate all transitions
+                nextstates = squeeze(subfield(end,:,:) + 1);
+                % Values equal to nstates + 1 are set back to 1.
+                % Values above 1+nstates are ignored. 
+                nextstates(nextstates ==  nstates+1) = 1;
+%                 
+%                 if i > 2
+%                     % if i == 2 then there's nothing to check before updating.
+%                     % otherwise, we can subtract the previous two fields and 
+%                     % only operate on the set of all cells within sendist of a
+%                     % cell that changed on the last update. 
+%                     % grab the indices of all the cells that changed
+%                     deltas = find(squeeze(subfield(end,:,:)) - maketorus(squeeze(obj.field(i-2,:,:)),sensdist));
+%                     % add indices of their neighbors
+%                     delta_nbrs = bsxfun(@plus,deltas,jumps(:).');
+%                     delta_nbrs(delta_nbrs < 1 | delta_nbrs > numel(subfield)) = [];
+%                     % we only want the unique values falling within allinds
+%                     % convert to subscripts 
+%                     % TODO (DVB) check whether this calculation is
+%                     % redundant
+%                     deltas = unique(vertcat(deltas(:),  delta_nbrs(:)));
+%                     [dy, dx] = ind2sub(size(subfield),deltas);
+%                     % toss all cells outside the field
+%                     deltas(dy' <= sensdist | dy' > (sy + sensdist) | dx' <= sensdist | dx' > (sx + sensdist)) = [];
+%                     inds = deltas;
+%                     % add to this list all the cells in the neighborhood of
+%                     % these cells
+%                 else
+%                     inds = allinds;
+%                 end
                 
                 % pre-calculate weighted neighborhoods
                 % thanks to mattj on matlab help for these
-                NeighborTable=subfield(bsxfun(@plus,inds,jumps(:).'));
-                NeighborTable=bsxfun(@times,NeighborTable, nhood(:).');
-                % see how vectorizing speeds things up
-                NeighborTable = sum(bsxfun(@eq, NeighborTable, nextstates(inds)),2);
-                NeighborTable = find(sum(bsxfun(@eq, NeighborTable, obj.go),2));
-                subfield(inds(NeighborTable)) = nextstates(inds(NeighborTable));
-
-                obj.field(i,:,:) = subfield(1+sensdist:(end-sensdist),1+sensdist:(end-sensdist));
+                % TODO (DVB) implement looping through different go
+                % conditions
+                
+%                 NeighborTable = nbr_inds;
+%                 for n = 1:size(nhood,1);
+%                     NeighborTable(n,:) = bsxfun(@times,nbr_inds, squeeze(nhood(n,:)).');
+%                     NeighborTable(n,:) = sum(bsxfun(@eq, NeighborTable(n,:), nextstates(inds)),2);
+%                 end
+% 
+%                 for k = 1:numel(obj.go)
+%                     matches = find(sum(bsxfun(@eq, NeighborTable, obj.go{k}),2));
+%                     subfield(inds(matches)) = nextstates(inds(matches));
+%                 end
+                % TODO (DVB) test efficacy of using convn instead of
+                % manually applying the neighborhood filter. this requires
+                % first flipping the neighborhood across all dimensions but
+                % convn should be really really fast.
+%                 NeighborTable = nbr_inds;
+                for k = 1:numel(obj.go)
+                    convolved = convn(subfield,nhood,'valid');
+                    matches = find(sum(bsxfun(@eq, convolved, obj.go{k}),2));
+                    subfield(inds(matches)) = nextstates(inds(matches));
+                end
+                
+                % Put data in obj.field
+                obj.field(i,:,:) = subfield(1,1+sensdist:(end-sensdist),1+sensdist:(end-sensdist));
                 if obj.show == 1;
                     colormap(obj.colorsc.cmap);
                     set(imge,'cdata',squeeze(obj.field(i,:,:)));
@@ -196,21 +247,21 @@ classdef caut
                 disp(['Simulation completed in ' num2str(toc)  's']);
             end
             function torus = maketorus(mat,distance)
-            % given an array of size = [y,x], return an array of 
-            % size = [y,x] + 2 * distance where the last [distance] rows
-            % columns have been copied to the opposite side of the array,
+            % given an array mat with size [z,y,x], return an array of 
+            % size = [z,y + 2 * distance, x + 2 * distance] where the last [distance] rows
+            % & columns have been copied to the opposite side of the array,
             % respectively. So given mat = [1 2 3; 4 5 6; 7 8 9] and
             % distance = 1, maketorus(mat,distance) returns
             % [9 7 8 9 7; 3 1 2 3 1; 6 4 5 6 4; 9 7 8 9 7; 3 1 2 3 1];
-            torus = zeros(size(squeeze(mat))+2*distance);
+            torus = zeros(size(mat,1), size(mat,2)+ 2*distance, size(mat,3) + 2*distance);
             % Bottom right
-            torus((2*distance+1):end,(2*distance+1):end) = circshift(squeeze(mat),[-distance,-distance]);
+            torus(:,(2*distance+1):end,(2*distance+1):end) = circshift(mat,[0,-distance,-distance]);
             % Top left
-            torus(1:end-(2*distance),1:end-(2*distance)) = circshift(squeeze(mat),[distance,distance]);
+            torus(:,1:end-(2*distance),1:end-(2*distance)) = circshift(mat,[0,distance,distance]);
             % Bottom left
-            torus((2*distance+1):end,1:end-(2*distance)) = circshift(squeeze(mat),[-distance,distance]);
+            torus(:,(2*distance+1):end,1:end-(2*distance)) = circshift(mat,[0,-distance,distance]);
             % Top right
-            torus(1:end-(2*distance),(2*distance+1):end) = circshift(squeeze(mat),[distance,-distance]);
+            torus(:,1:end-(2*distance),(2*distance+1):end) = circshift(mat,[0,distance,-distance]);
             end
         end
         
