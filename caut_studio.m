@@ -12,11 +12,17 @@ datpath = [uigetdir(inpath,'set path for video files') filesep];
 % Frame rate of outbound video
 frate = 30;
 % Type of file to save
-profile = 'Uncompressed AVI';
+profile = 'Motion JPEG AVI';
+if strcmp(profile,'MPEG-4') || strcmp(profile,'Motion JPEG AVI')
+    % If the output format of the video is appropriate, set the quality
+    qual = 100;
+else
+    qual = 0;
+end
 % Degree of interpolation between frames
 smooth = 500;
 % Length of movie, in seconds
-dur = 800;
+dur = 1800;
 % Length of the loop to generate images
 loopct = dur * frate;
 % Starting time, in simulation time
@@ -24,18 +30,18 @@ simstart = 1;
 % last sim time to process
 simend = simstart + loopct/smooth;
 % TODO(DVB) Colormaps -- need to generate as many as there are files
-cmap = (bone(4000) + jet(4000))./2;
-cmap = flipdim(cmap,1);
+cmap = gray(5000).^2;
 % TODO(DVB) Smart caxis set-up
 cax = [-7 3];
 % Video resolution; may require that a simulation be re-run with a bigger
 % field, depending on whether the simulation ever reached the edge of the
 % field. Use a higher value than will be displayed to avoid edge artifacts
-res = [724,724];
+res = [1028,1028];
 % Number of rows and columns to hide when plotting data
 offset = [4,4];
-plotrange(1,:) = (1:(res(1)-offset(1))) + offset(1)/2;
-plotrange(2,:) = (1:(res(2)-offset(2))) + offset(2)/2;
+plotrange = [];
+plotrange{2} = (1:(res(1)-offset(1))) + offset(1)/2;
+plotrange{1} = (1:(res(2)-offset(2))) + offset(2)/2;
 % If reseed is set to 1, then the original seeding is discarded and a new 
 % seed is used
 reseed = 1;
@@ -55,11 +61,11 @@ for ifile = 1:numel(infiles)
   % Check whether it needs to be extended, and if so, how
   if ~isequal(size(toshow),res);
     % rerun the simulation with field sized properly
-    newf = ones(1,res(2),res(1));
+    newf = ones(1,res(1),res(2));
     sy = size(toshow,2);
     sx = size(toshow,3);
-    yoff = (res(2) - sy)/2;
-    xoff = (res(1) - sx)/2;
+    yoff = (res(1) - sy)/2;
+    xoff = (res(2) - sx)/2;
     newf(1,yoff+1 : end - yoff, xoff+1 : end - xoff) = toshow;
     csim.field = newf;
   end
@@ -85,6 +91,9 @@ for ifile = 1:numel(infiles)
   colormap(cmap);
   % Create videowriter object
   vid = VideoWriter([datpath csim.simid],profile);
+  if qual > 0
+      vid.Quality = qual;   
+  end
   vid.FrameRate = frate;
   vid.open;
   for i = 1:(simend - simstart)
@@ -102,7 +111,7 @@ for ifile = 1:numel(infiles)
       toplot = log(abs(fftshift(fft2(toplot))));
       % Apply median filter
       toplot = medfilt2(toplot,'symmetric');
-      toplot = toplot(plotrange(1,:),plotrange(2,:));
+      toplot = toplot(plotrange{2},plotrange{1});
       imagesc(toplot);
       set(gca,'units','pixels');
       set(gca,'position',[1 1 (res(2) - offset(2))-1 (res(1)-offset(1))]);

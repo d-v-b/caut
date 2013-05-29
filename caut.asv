@@ -218,16 +218,23 @@ classdef caut
                 end
                 
                 % pre-calculate all transitions
-                nextstates = squeeze(subfield(end,:) + 1);
+                nextstates = [nstates 1:nstates-1];
                 % Values equal to nstates + 1 are set back to 1.
                 % Values above 1+nstates are ignored.
-                nextstates(nextstates ==  nstates+1) = 1;
+%                 nextstates(nextstates ==  nstates+1) = 1;
                 
                 for k = 1:nstates
                     loc_hood = hood{k};
                     loc_go = obj.go{k};
                    
-                    convolved = convn(subfield,loc_hood,'valid');
+                    % Filter subfield for all values of the next state,
+                    % then convolve with the neighborhood. Then find all
+                    % the indices where subfield == the current state, and
+                    % check whether these indices in the convolution
+                    % product contain any of the values specified by the
+                    % local go rule. 
+                    
+                    convolved = convn(squeeze(subfield == nextstates(k)),squeeze(loc_hood),'valid');
                     matches = find(sum(bsxfun(@eq, convolved, loc_go),2));
                     subfield(matches) = nextstates(matches+1);
                 end
