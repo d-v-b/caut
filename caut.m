@@ -66,7 +66,7 @@ classdef caut
             id = [stat go hood fld];
         end
         
-        function obj = caut(fld_matrix, nbr_matrix, go_matrix, varargin)
+        function obj = caut(fld_matrix, nbr_matrix, go_matrix, varargin)sssdasd
             % Constructs the intial condition of the simulation
             par = inputParser;
             defcol.cmap = 'gray';
@@ -204,40 +204,36 @@ classdef caut
             % state-dependent? Adding dimensions makes ultimately linearizing it
             % increasingly difficult. Let's forget about linearizing it for
             % now, since that doesn't scale well at all.
-            
+            nextstates = [2:nstates 1];            
                      
             for i = init:(epoch)
                 % Pad the field by giving it a toroidal geometry or
                 % embedding the entire array in 0s, where the width of the
                 % padding is determined by the largest neighborhood matrix.
+                nextfield = squeeze(obj.field(i-1,:,:));
                 if shape == 1
                     subfield = maketorus(squeeze(obj.field(i-memdist:i,:,:)),sensdist);
                 else
                     subfield = zeros(memdist,sy+2*sensdist,sx+2*sensdist);
                     subfield(:,sensdist+1:end-sensdist,sensdist+1:end-sensdist) = obj.field(i-memdist:i-1,:,:);
                 end
-                
-                % pre-calculate all transitions
-                nextstates = squeeze(subfield(end,:) + 1);
-                % Values equal to nstates + 1 are set back to 1.
-                % Values above 1+nstates are ignored.
-                nextstates(nextstates ==  nstates+1) = 1;
-                
+                                
                 for k = 1:nstates
                     loc_hood = hood{k};
                     loc_go = obj.go{k};
-                   
-                    convolved = convn(subfield,loc_hood,'valid');
-                    matches = find(sum(bsxfun(@eq, convolved, loc_go),2));
-                    subfield(matches) = nextstates(matches+1);
+                    % 
+                    convolved = (nextfield == k).*squeeze(convn(subfield == nextstates(k),loc_hood,'valid'));
+                    
+                    matches = find(sum(bsxfun(@eq, convolved(:), loc_go),2));
+                    nextfield(matches) = nextstates(k);
                 end
 
                 % Put data in obj.field
-                obj.field(i,:,:) = subfield(1,1+sensdist:(end-sensdist),1+sensdist:(end-sensdist));
+                obj.field(i,:,:) = nextfield;
                 % Plot it
                 if obj.show == 1;
-                    colormap(obj.colorsc.cmap);
-                    set(imge,'cdata',squeeze(obj.field(i,:,:)));
+%                     colormap(obj.colorsc.cmap);
+                    imagesc(squeeze(obj.field(i,:,:)));
                     drawnow
                 end
                 
