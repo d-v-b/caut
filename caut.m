@@ -66,7 +66,7 @@ classdef caut
             id = [stat go hood fld];
         end
         
-        function obj = caut(fld_matrix, nbr_matrix, go_matrix, varargin)sssdasd
+        function obj = caut(fld_matrix, nbr_matrix, go_matrix, varargin)
             % Constructs the intial condition of the simulation
             par = inputParser;
             defcol.cmap = 'gray';
@@ -222,7 +222,7 @@ classdef caut
                     loc_hood = hood{k};
                     loc_go = obj.go{k};
                     % 
-                    convolved = (nextfield == k).*squeeze(convn(subfield == nextstates(k),loc_hood,'valid'));
+                    convolved = (squeeze(obj.field(i-1,:,:)) == k).*squeeze(convn(subfield == nextstates(k),loc_hood,'valid'));
                     
                     matches = find(sum(bsxfun(@eq, convolved(:), loc_go),2));
                     nextfield(matches) = nextstates(k);
