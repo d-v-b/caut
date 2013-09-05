@@ -27,8 +27,8 @@ classdef caut
         show % struct: determines how simulation is displayed
         colorsc % colorscale for visualizing system
         fieldshape % geometry of the field -- torus or bounded plane
-        qualParams % struct containing parameters for the quality checks
-        behavior % struct containing boolean-valued fields that describe the behavior of the sim
+        %qualParams % struct containing parameters for the quality checks
+        %behavior % struct containing boolean-valued fields that describe the behavior of the sim
     end
     
     properties (Dependent = true)
@@ -124,7 +124,7 @@ classdef caut
             obj.fieldshape = par.Results.fieldshape;
         end
         
-        % function to run the simulation
+        % method to run the simulation
         function obj =  runSim(obj)
             tic
             nstates = obj.states;
@@ -237,7 +237,9 @@ classdef caut
                 matches = [];
                 
                 for n = 1:nWorkers
-                    parIm{n}
+                    locInds = parInds(n,:);
+                    parIm{n} = squeeze(subfield(:,sensdist+(locInds(1):locInds(2)),:));
+                    
                 end
                 
                 parfor n = 1:nWorkers

@@ -27,6 +27,8 @@ classdef caut
         show % struct: determines how simulation is displayed
         colorsc % colorscale for visualizing system
         fieldshape % geometry of the field -- torus or bounded plane
+        qualParams % struct containing parameters for the quality checks
+        behavior % struct containing boolean-valued fields that describe the behavior of the sim
     end
     
     properties (Dependent = true)
@@ -206,6 +208,20 @@ classdef caut
             % now, since that doesn't scale well at all.
             nextstates = [2:nstates 1];            
                      
+            % divide the image into chunks and operate on those in
+            % parallel
+            divs = [];
+            parInds = [];
+            nWorkers = matlabpool('SIZE');
+            if nWorkers > 1
+                divs = floor(sy/nWorkers);
+                for i = 1:nWorkers
+                    parInds(i,:) = [1, divs] + ((i-1) * divs);
+                end
+                parInds(end,end) = sy;
+                
+            end
+            
             for i = init:(epoch)
                 % Pad the field by giving it a toroidal geometry or
                 % embedding the entire array in 0s, where the width of the
@@ -218,16 +234,17 @@ classdef caut
                     subfield(:,sensdist+1:end-sensdist,sensdist+1:end-sensdist) = obj.field(i-memdist:i-1,:,:);
                 end
                                 
+                matches = [];
+                
                 for k = 1:nstates
                     loc_hood = hood{k};
                     loc_go = obj.go{k};
-                    % 
                     convolved = (squeeze(obj.field(i-1,:,:)) == k).*squeeze(convn(subfield == nextstates(k),loc_hood,'valid'));
                     
                     matches = find(sum(bsxfun(@eq, convolved(:), loc_go),2));
                     nextfield(matches) = nextstates(k);
                 end
-
+                
                 % Put data in obj.field
                 obj.field(i,:,:) = nextfield;
                 % Plot it
@@ -240,13 +257,11 @@ classdef caut
                 if i > obj.states && isequal(obj.field(i-obj.states,:,:),obj.field(i,:,:)) || isequal(obj.field(i-1,:,:),obj.field(i,:,:))
                     % Wipe the redundant future times
                     obj.field(i+1:end,:,:) = [];
+                    obj.behavior.froze = 1;
                     disp('Abort: Simulation oscillating or crystallized')
                     break
                 end
-
-                
-                
-                
+               
                 %
                 %                 if i > 2
                 %                     % if i == 2 then there's nothing to check before updating.
@@ -393,8 +408,18 @@ classdef caut
             end
         end
         
-        % save sim as a .gif
+        function vectout = qualCheck(obj)
+        % apply various measures to a completed simulation and return a
+        % vector of booleans specifying which checks failed
+        field = obj.field;
+        % first check the distribution of states in the final frame
+        
+        
+        
+        end
+        
         function out = makeGif(obj, outfname)
+            % save sim as a .gif
             % check outpath for validity
             if exist('outfname','var')
                 sepind = strfind(outfname,filesep);
