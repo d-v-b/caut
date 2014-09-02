@@ -98,9 +98,7 @@ classdef caut
             
             if ~isequal(numel(obj.go), obj.states)
                 if numel(obj.go) == 1
-                    obj.go(2:nstates) = obj.go(1);
-                else
-% TODO(DVB) fix this causing errors with small seeds: error('Number of go conditions must equal number of states or 1')
+                    obj.go(2:nstates) = obj.go(1);                
                 end
             end
             
@@ -218,7 +216,6 @@ classdef caut
                     end
                     
                     else
-                        %imagesc(medfilt2(log(abs(real(fftshift(fft2(obj.field(:,:,i))))))));
                         imagesc(obj.field(:,:,i))
                         drawnow                        
                     end
